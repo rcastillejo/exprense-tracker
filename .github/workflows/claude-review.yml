@@ -1,0 +1,26 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  spec-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GIT_HUB_PAT }}
+          prompt: |
+            Revisa este PR contra los specs del proyecto:
+            1. Verifica que el código implementa lo definido en requirements.md
+            2. Verifica que respeta la arquitectura en design.md
+            3. Verifica que todas las tasks en tasks.md están completadas
+            4. Revisa tests: cobertura de criterios de aceptación
+            5. Revisa que CLAUDE.md (patrones, restricciones) se respeta
+            Comenta con: ✅ qué cumple, ⚠️ qué falta, ❌ qué viola el spec.

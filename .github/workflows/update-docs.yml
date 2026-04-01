@@ -1,0 +1,27 @@
+name: Auto-update Docs
+
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', '!docs/**']
+
+jobs:
+  update-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GIT_HUB_PAT }}
+          claude_args: "--max-turns 5"
+          prompt: |
+            Detecta qué cambió en este push.
+            Actualiza únicamente la documentación afectada:
+            - README si cambia la API pública o setup
+            - docs/api/ si cambian endpoints
+            - Specs tasks.md si hay tasks completadas
+            NO modifiques lógica de código.

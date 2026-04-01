@@ -1,0 +1,88 @@
+name: SDD Feature Workflow
+
+on:
+  issues:
+    types: [opened, assigned]
+  issue_comment:
+    types: [created]
+
+jobs:
+  sdd-requirements:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GIT_HUB_PAT }}
+          prompt: |
+            Lee el issue #${{ github.event.issue.number }}:
+            Título: ${{ github.event.issue.title }}
+            Descripción: ${{ github.event.issue.body }}
+            
+            1. Lee CLAUDE.md para entender el contexto del proyecto
+            2. Crea .specs/${{ github.event.issue.number }}-feature/requirements.md con:
+               - User stories en formato "As a... I want... so that..."
+               - Criterios de aceptación GIVEN/WHEN/THEN por cada story
+            3. Comenta en el issue con el resumen y pide aprobación con:
+               "@team He generado requirements.md. Revisar y responder 
+               '@claude approve requirements' para continuar con design."
+
+  sdd-design:
+    if: |
+      github.event_name == 'issue_comment' &&
+      contains(github.event.comment.body, '@claude approve requirements')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GIT_HUB_PAT }}
+          prompt: |
+            Requirements aprobados para issue #${{ github.event.issue.number }}.
+            Lee .specs/${{ github.event.issue.number }}-feature/requirements.md
+            
+            Genera design.md con:
+            - Arquitectura propuesta (componentes, capas)
+            - Diagrama de secuencia en Mermaid
+            - Decisiones técnicas (ADRs) con justificación
+            - Impacto en codebase existente
+            
+            Comenta en el issue pidiendo aprobación del diseño con:
+            "@team Design listo. '@claude approve design' para implementar."
+
+  sdd-implement:
+    if: |
+      github.event_name == 'issue_comment' &&
+      contains(github.event.comment.body, '@claude approve design')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GIT_HUB_PAT }}
+          prompt: |
+            Design aprobado. Lee requirements.md y design.md en
+            .specs/${{ github.event.issue.number }}-feature/
+            
+            1. Genera tasks.md con tareas secuenciadas y sus dependencias
+            2. Implementa cada task respetando el design
+            3. Escribe tests unitarios por cada componente nuevo
+            4. Crea un PR vinculado al issue #${{ github.event.issue.number }}
+               con título: "feat: [descripción del issue]"
+               Body: resumen de requirements + design decisions + tasks completadas
