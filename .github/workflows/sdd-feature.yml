@@ -8,7 +8,9 @@ on:
 
 jobs:
   sdd-requirements:
-    if: github.event_name == 'issues'
+    if: github.event_name == 'issues' ||
+      (github.event_name == 'issue_comment' &&
+        contains(github.event.comment.body, '@claude generate requirements'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -16,32 +18,42 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GIT_HUB_PAT }}
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GIT_HUB_PAT }}
           prompt: |
-            Lee los archivos de contexto del proyecto:
+            Lee los archivos de contexto:
             - CLAUDE.md
             - docs/problem-statement.md
             - docs/decisions/ADR-001-stack-tecnologico.md
 
-            Luego Lee el issue #${{ github.event.issue.number }}:
-            Título: ${{ github.event.issue.title }}
+            Lee el issue #${{ github.event.issue.number }}:
+            Título: "${{ github.event.issue.title }}"
             Descripción: ${{ github.event.issue.body }}
+
+            Luego ejecuta estos pasos en orden:
+
+            1. Crea el directorio: .specs/${{ github.event.issue.number }}-feature/
             
-            Genera el archivo .specs/${{ github.event.issue.number }}-feature/requirements.md con:
-            - User stories en formato "As a [usuario], I want [acción] so that [beneficio]"
-            - Criterios de aceptación en formato GIVEN/WHEN/THEN por cada story
-            - Sección de restricciones técnicas alineadas al ADR-001
-            - Sección fuera de alcance (basada en problem-statement.md)
-            
-            Al terminar, comenta en el issue:
-            "✅ requirements.md generado en .specs/${{ github.event.issue.number }}-feature/
-            
-            Revisar el archivo y responder con:
-            @claude approve requirements
-            para continuar con design.md"
+            2. Crea el archivo .specs/${{ github.event.issue.number }}-feature/requirements.md con:
+               - User stories en formato "As a [usuario], I want [acción] so that [beneficio]"
+               - Criterios de aceptación GIVEN/WHEN/THEN por cada story
+               - Restricciones técnicas alineadas al ADR-001
+               - Sección fuera de alcance
+
+            3. Ejecuta los siguientes comandos git para commitear:
+               git config user.email "actions@github.com"
+               git config user.name "GitHub Actions"
+               git add .specs/
+               git commit -m "spec: add requirements for issue #${{ github.event.issue.number }}"
+               git push
+
+            4. Comenta en el issue #${{ github.event.issue.number }}:
+               "✅ requirements.md generado. Revisar en .specs/${{ github.event.issue.number }}-feature/requirements.md
+               Responder con @claude approve requirements para continuar con design.md"
 
   sdd-design:
     if: |
