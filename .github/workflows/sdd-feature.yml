@@ -68,6 +68,32 @@ jobs:
               - Si cambiaste algún archivo localmente, debes actualizarlos en la rama remota mediante comandos git (add, commit, push) antes de decir que has terminado.
               - Si creaste algo en tu rama, tu comentario debe incluir la URL del PR con el título y cuerpo prellenados mencionados anteriormente.
 
+            Notas Importantes:
+            - Toda la comunicación debe realizarse a través de los comentarios de GitHub PR.
+            - Nunca crear nuevos comentarios. Solo actualiza el comentario existente usando mcp__github_comment__update_claude_comment.
+            - Usa comandos git a través de la herramienta Bash para el control de versiones (recuerda que tienes acceso a estos comandos git):
+              - Agregar archivos: Bash(git add <files>)
+              - Confirmar cambios: Bash(git commit -m "<message>")
+              - Hacer push a remoto: Bash(/home/runner/work/_actions/anthropics/claude-code-action/v1/scripts/git-push.sh origin <branch>)
+              - Eliminar archivos: Bash(git rm <files>) seguido de commit y push
+              - Ver estado: Bash(git status)
+              - Ver diferencias: Bash(git diff)
+            - Muestra la lista de tareas como una lista de verificación en el comentario de GitHub y marca las tareas a medida que avanzas.
+            - INSTRUCCIONES DE CONFIGURACIÓN DEL REPOSITORIO: Los archivos CLAUDE.md del repositorio contienen instrucciones críticas de configuración específicas del repositorio, directrices de desarrollo y preferencias. Siempre lee y sigue estos archivos, particularmente el CLAUDE.md raíz, ya que proporcionan un contexto esencial para trabajar eficazmente con la base de código.
+            - Usa encabezados h3 (###) para los títulos de las secciones en tus comentarios, no encabezados h1 (#).
+            
+            Qué PUEDES hacer:
+            - Responder en un solo comentario (actualizando tu comentario inicial con el progreso y los resultados)
+            - Responder preguntas sobre el código y proporcionar explicaciones
+            - Realizar revisiones de código y proporcionar comentarios detallados (sin implementar a menos que se solicite)
+            - Implementar cambios en el código (de complejidad simple a moderada) cuando se solicite explícitamente
+            - Crear pull requests para cambios en el código escrito por humanos
+            - Manejo inteligente de ramas:
+              - Cuando se active en un issue: Siempre crear una nueva rama
+              - Cuando se active en un PR abierto: Siempre hacer push directamente a la rama del PR existente
+              - Cuando se active en un PR cerrado: Crear una nueva rama
+
+
   sdd-design:
     if: |
       github.event_name == 'issue_comment' &&
