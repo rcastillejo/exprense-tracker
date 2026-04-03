@@ -8,9 +8,7 @@ on:
 
 jobs:
   sdd-requirements:
-    if: github.event_name == 'issues' ||
-      (github.event_name == 'issue_comment' &&
-        contains(github.event.comment.body, '@claude generate requirements'))
+    if: github.event_name == 'issues'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -24,9 +22,6 @@ jobs:
           token: ${{ secrets.GIT_HUB_PAT }}
           fetch-depth: 1                    
       - uses: anthropics/claude-code-action@v1
-        env:
-          # Prepare inputs
-          MODE: tag
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GIT_HUB_PAT }}
@@ -61,13 +56,13 @@ jobs:
 
             3. Comenta en el issue #${{ github.event.issue.number }}:
                "✅ requirements.md generado. Revisar en .specs/${{ github.event.issue.number }}-feature/requirements.md
-               Responder con @claude approve requirements para continuar con design.md"
+               Responder con @claude-approve-requirements para continuar con design.md"
 
 
   sdd-design:
     if: |
       github.event_name == 'issue_comment' &&
-      contains(github.event.comment.body, '@claude approve requirements')
+      contains(github.event.comment.body, '@claude-approve-requirements')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -75,27 +70,36 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GIT_HUB_PAT }}
+          fetch-depth: 1
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GIT_HUB_PAT }}
+          branch_prefix: "sdd/"
+          use_sticky_comment: true
+          classify_inline_comments: true
+          track_progress: true
+          include_fix_links: true
           prompt: |
             Requirements aprobados para issue #${{ github.event.issue.number }}.
-            Lee .specs/${{ github.event.issue.number }}-feature/requirements.md
+            1. Lee .specs/${{ github.event.issue.number }}-feature/requirements.md
             
-            Genera design.md con:
+            2. Genera en .specs/${{ github.event.issue.number }}-feature/design.md con:
             - Arquitectura propuesta (componentes, capas)
             - Diagrama de secuencia en Mermaid
             - Decisiones técnicas (ADRs) con justificación
             - Impacto en codebase existente
             
-            Comenta en el issue pidiendo aprobación del diseño con:
-            "@team Design listo. '@claude approve design' para implementar."
+            3. Comenta en el issue #${{ github.event.issue.number }}:
+               "✅ design.md generado. Revisar en .specs/${{ github.event.issue.number }}-feature/design.md
+               Responder con @claude-approve-design para continuar con la implementación"
 
   sdd-implement:
     if: |
       github.event_name == 'issue_comment' &&
-      contains(github.event.comment.body, '@claude approve design')
+      contains(github.event.comment.body, '@claude-approve-design')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -103,15 +107,23 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GIT_HUB_PAT }}
+          fetch-depth: 1
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GIT_HUB_PAT }}
+          branch_prefix: "sdd/"
+          use_sticky_comment: true
+          classify_inline_comments: true
+          track_progress: true
+          include_fix_links: true
           prompt: |
             Design aprobado. Lee requirements.md y design.md en
             .specs/${{ github.event.issue.number }}-feature/
             
-            1. Genera tasks.md con tareas secuenciadas y sus dependencias
+            1. Genera .specs/${{ github.event.issue.number }}-feature/tasks.md con tareas secuenciadas y sus dependencias
             2. Implementa cada task respetando el design
             3. Escribe tests unitarios por cada componente nuevo
             4. Crea un PR vinculado al issue #${{ github.event.issue.number }}
