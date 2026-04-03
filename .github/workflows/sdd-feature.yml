@@ -29,7 +29,7 @@ jobs:
           github_token: ${{ secrets.GIT_HUB_PAT }}
           additional_permissions: |
             actions: read
-          claude_args: '--allowedTools "Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git config:*),Bash(mkdir:*),Read,Write,Edit" --permission-mode acceptEdits'
+          claude_args: '--allowedTools "Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git config:*),Bash(mkdir:*),Bash(gh issue comment:*),Read,Write,Edit" --permission-mode acceptEdits'
           prompt: |
             Lee los archivos de contexto:
             - CLAUDE.md
@@ -60,6 +60,13 @@ jobs:
             4. Comenta en el issue #${{ github.event.issue.number }}:
                "✅ requirements.md generado. Revisar en .specs/${{ github.event.issue.number }}-feature/requirements.md
                Responder con @claude approve requirements para continuar con design.md"
+
+            5. Final Update:
+              - Siempre actualiza el comentario de GitHub para reflejar el estado actual de las tareas.
+              - Cuando todas las tareas estén completadas, elimina el spinner y agrega un breve resumen de lo que se logró y lo que no se hizo.
+              - Nota: Si ves comentarios anteriores de Claude con encabezados como "**Claude finished @user's task**" seguidos de "---", no los incluyas en tu comentario. El sistema los agrega automáticamente.
+              - Si cambiaste algún archivo localmente, debes actualizarlos en la rama remota mediante comandos git (add, commit, push) antes de decir que has terminado.
+              - Si creaste algo en tu rama, tu comentario debe incluir la URL del PR con el título y cuerpo prellenados mencionados anteriormente.
 
   sdd-design:
     if: |
