@@ -44,6 +44,18 @@ THEN el email se registra con status "parse_error"
   AND el pipeline continúa sin interrumpirse
 ```
 
+**Scenario 3 — Formato de email BCP no reconocido (fallback Claude API)**
+```
+GIVEN que BCP cambia el formato del email de notificación
+  AND el regex del parser BCP no puede extraer los campos requeridos
+WHEN el trigger diario se ejecuta
+  AND la configuración del banco tiene fallback_ai=true
+THEN el cuerpo del email se envía a Claude API como fallback de parseo
+  AND si Claude extrae los datos correctamente, el gasto se registra con parsed_by_ai=true
+  AND si Claude tampoco puede extraer los datos, el gasto se registra con status="parse_error"
+  AND el pipeline continúa sin interrumpirse
+```
+
 ---
 
 ### US-02 — Ingesta automática de emails de Interbank
@@ -69,6 +81,18 @@ GIVEN que un email de Interbank ya fue procesado en una ejecución anterior
 WHEN el trigger diario vuelve a ejecutarse
 THEN el email no se procesa nuevamente
   AND no se crea un registro duplicado en Sheets
+```
+
+**Scenario 3 — Formato de email Interbank no reconocido (fallback Claude API)**
+```
+GIVEN que Interbank cambia el formato del email de notificación
+  AND el regex del parser Interbank no puede extraer los campos requeridos
+WHEN el trigger diario se ejecuta
+  AND la configuración del banco tiene fallback_ai=true
+THEN el cuerpo del email se envía a Claude API como fallback de parseo
+  AND si Claude extrae los datos correctamente, el gasto se registra con parsed_by_ai=true
+  AND si Claude tampoco puede extraer los datos, el gasto se registra con status="parse_error"
+  AND el pipeline continúa sin interrumpirse
 ```
 
 ---
@@ -115,6 +139,26 @@ WHEN el trigger diario se ejecuta
 THEN el gasto se registra con banco="Scotiabank" y todos los campos requeridos
 ```
 
+**Scenario 2 — Email duplicado de Scotiabank**
+```
+GIVEN que un email de Scotiabank ya fue procesado en una ejecución anterior
+WHEN el trigger diario vuelve a ejecutarse
+THEN el email no se procesa nuevamente
+  AND no se crea un registro duplicado en Sheets
+```
+
+**Scenario 3 — Formato de email Scotiabank no reconocido (fallback Claude API)**
+```
+GIVEN que Scotiabank cambia el formato del email de notificación
+  AND el regex del parser Scotiabank no puede extraer los campos requeridos
+WHEN el trigger diario se ejecuta
+  AND la configuración del banco tiene fallback_ai=true
+THEN el cuerpo del email se envía a Claude API como fallback de parseo
+  AND si Claude extrae los datos correctamente, el gasto se registra con parsed_by_ai=true
+  AND si Claude tampoco puede extraer los datos, el gasto se registra con status="parse_error"
+  AND el pipeline continúa sin interrumpirse
+```
+
 ---
 
 ### US-05 — Ingesta automática de pagos Yape / Plin
@@ -137,6 +181,22 @@ THEN el gasto se registra con banco="Yape", monto, fecha y destinatario como com
 GIVEN que existe un email de confirmación de pago Plin en Gmail
 WHEN el trigger diario se ejecuta
 THEN el gasto se registra con banco="Plin", monto, fecha y destinatario como comercio
+```
+
+**Scenario 3 — Pago Yape duplicado**
+```
+GIVEN que un email de confirmación de pago Yape ya fue procesado en una ejecución anterior
+WHEN el trigger diario vuelve a ejecutarse
+THEN el email no se procesa nuevamente
+  AND no se crea un registro duplicado en Sheets
+```
+
+**Scenario 4 — Pago Plin duplicado**
+```
+GIVEN que un email de confirmación de pago Plin ya fue procesado en una ejecución anterior
+WHEN el trigger diario vuelve a ejecutarse
+THEN el email no se procesa nuevamente
+  AND no se crea un registro duplicado en Sheets
 ```
 
 ---
@@ -245,7 +305,7 @@ Cada fila en la hoja de gastos debe contener:
 | `parsed_by_ai` | Boolean | true si el parseo lo realizó Claude API como fallback |
 | `status` | String | "ok" / "parse_error" |
 | `email_id` | String | ID del email en Gmail para deduplicación |
-| `timestamp_ingesta` | String (ISO 8601) | Fecha-hora en que se procesó el email |
+| `timestamp_ingesta` | String (ISO 8601, UTC-5) | Fecha-hora en que se procesó el email, en zona horaria America/Lima (UTC-5, sin horario de verano) |
 
 ---
 
@@ -263,6 +323,79 @@ Cada fila en la hoja de gastos debe contener:
 | **Deduplicación** | Por `email_id` de Gmail — cada email se procesa exactamente una vez |
 | **Emails por banco** | Parsers independientes por banco con regex; Claude API como fallback |
 | **Frecuencia** | Trigger diario — no se requiere procesamiento en tiempo real |
+
+---
+
+## Configuración por banco
+
+Cada banco tiene una configuración independiente almacenada en un objeto de configuración central (ej. `CONFIG` en Apps Script). Todos los parámetros son modificables sin cambiar la lógica del pipeline, lo que permite adaptar el sistema cuando un banco cambia remitentes, asuntos o formatos.
+
+### Parámetros configurables por banco
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `gmail_query` | String | Query de Gmail para encontrar emails del banco (remitente, asunto, palabras clave) |
+| `label_procesado` | String | Label de Gmail aplicado al email tras procesarse exitosamente |
+| `label_error` | String | Label de Gmail aplicado al email si el parseo falla |
+| `parser_format` | String | Identificador del formato esperado del email (referencia al parser correspondiente) |
+| `fallback_ai` | Boolean | `true` si Claude API debe usarse como fallback cuando el regex no extrae los campos |
+| `banco_nombre` | String | Nombre canónico del banco tal como se registra en Sheets (`banco` field) |
+
+### Valores por defecto
+
+| Banco | `gmail_query` | `label_procesado` | `label_error` | `fallback_ai` |
+|---|---|---|---|---|
+| BCP | `from:(alertas@notificacionesbcp.com) subject:(consumo OR cargo)` | `ingesta/bcp/ok` | `ingesta/bcp/error` | `true` |
+| Interbank | `from:(alertas@interbank.pe) subject:(consumo OR cargo)` | `ingesta/interbank/ok` | `ingesta/interbank/error` | `true` |
+| BBVA | `from:(alertas@notificaciones.bbvaperu.com) subject:(alerta OR compra)` | `ingesta/bbva/ok` | `ingesta/bbva/error` | `true` |
+| Scotiabank | `from:(notificaciones@scotiabank.com.pe)` | `ingesta/scotiabank/ok` | `ingesta/scotiabank/error` | `true` |
+| Yape | `from:(noreply@yape.com.pe) subject:(realizaste un pago)` | `ingesta/yape/ok` | `ingesta/yape/error` | `false` |
+| Plin | `from:(noreply@plin.pe) subject:(realizaste un pago)` | `ingesta/plin/ok` | `ingesta/plin/error` | `false` |
+
+> **Nota:** Los valores de `gmail_query` son ejemplos basados en patrones típicos. Deben verificarse con emails reales de cada banco antes de la implementación. Ajustar `gmail_query` no requiere modificar el código del parser.
+
+> **Nota sobre `fallback_ai`:** Yape y Plin tienen formatos de email más estables y estructurados que los bancos tradicionales, por lo que `fallback_ai=false` es el valor por defecto. Puede habilitarse si fuera necesario.
+
+---
+
+## Mecanismo de deduplicación
+
+La deduplicación garantiza que ningún email sea procesado más de una vez, incluso si el trigger diario se ejecuta múltiples veces o si hay reintentos.
+
+### Mecanismo primario — Gmail labels por banco
+
+Al procesar un email (exitoso o con error), Apps Script aplica el label correspondiente (`label_procesado` o `label_error`) definido en la configuración del banco. La query de búsqueda de cada ejecución **excluye explícitamente** los emails ya etiquetados:
+
+```
+<gmail_query_banco> -label:ingesta/<banco>/ok -label:ingesta/<banco>/error
+```
+
+Este mecanismo es el más eficiente porque filtra en Gmail antes de descargar el contenido del email.
+
+### Mecanismo secundario — email_id en Google Sheets
+
+Antes de insertar un nuevo registro en Sheets, el pipeline verifica si el `email_id` del email ya existe en la columna correspondiente. Si existe, el email se descarta silenciosamente sin escribir una nueva fila.
+
+Este mecanismo actúa como respaldo ante edge cases donde el label de Gmail no se haya aplicado correctamente (ej. error de red entre el procesamiento y el etiquetado).
+
+### Flujo de deduplicación
+
+```
+1. Gmail query con exclusión de labels → solo emails sin procesar
+2. Para cada email encontrado:
+   a. Verificar email_id en Sheets → descartar si ya existe
+   b. Procesar email (parser regex → fallback Claude si fallback_ai=true)
+   c. Escribir fila en Sheets con email_id
+   d. Aplicar label (label_procesado o label_error) en Gmail
+```
+
+### Parámetros de deduplicación configurables
+
+| Parámetro | Valor por defecto | Descripción |
+|---|---|---|
+| `label_procesado` | `ingesta/<banco>/ok` | Label de Gmail para emails procesados exitosamente |
+| `label_error` | `ingesta/<banco>/error` | Label de Gmail para emails con status "parse_error" |
+| `dedup_check_sheets` | `true` | Habilitar verificación de `email_id` en Sheets como respaldo |
 
 ---
 
