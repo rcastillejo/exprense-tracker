@@ -2,7 +2,7 @@ name: SDD Feature Workflow
 
 on:
   issues:
-    types: [opened, assigned, edited]
+    types: [opened, assigned]
   issue_comment:
     types: [created]
 
