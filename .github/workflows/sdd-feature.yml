@@ -21,17 +21,27 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GIT_HUB_PAT }}
           prompt: |
-            Lee el issue #${{ github.event.issue.number }}:
+            Lee los archivos de contexto del proyecto:
+            - CLAUDE.md
+            - docs/problem-statement.md
+            - docs/decisions/ADR-001-stack-tecnologico.md
+
+            Luego Lee el issue #${{ github.event.issue.number }}:
             Título: ${{ github.event.issue.title }}
             Descripción: ${{ github.event.issue.body }}
             
-            1. Lee CLAUDE.md para entender el contexto del proyecto
-            2. Crea .specs/${{ github.event.issue.number }}-feature/requirements.md con:
-               - User stories en formato "As a... I want... so that..."
-               - Criterios de aceptación GIVEN/WHEN/THEN por cada story
-            3. Comenta en el issue con el resumen y pide aprobación con:
-               "@team He generado requirements.md. Revisar y responder 
-               '@claude approve requirements' para continuar con design."
+            Genera el archivo .specs/${{ github.event.issue.number }}-feature/requirements.md con:
+            - User stories en formato "As a [usuario], I want [acción] so that [beneficio]"
+            - Criterios de aceptación en formato GIVEN/WHEN/THEN por cada story
+            - Sección de restricciones técnicas alineadas al ADR-001
+            - Sección fuera de alcance (basada en problem-statement.md)
+            
+            Al terminar, comenta en el issue:
+            "✅ requirements.md generado en .specs/${{ github.event.issue.number }}-feature/
+            
+            Revisar el archivo y responder con:
+            @claude approve requirements
+            para continuar con design.md"
 
   sdd-design:
     if: |
