@@ -57,7 +57,7 @@ const CONFIG = {
     bbva: {
       enabled: true,
       banco_nombre: 'BBVA',
-      gmail_query: 'from:(alertas@notificaciones.bbvaperu.com) subject:(alerta OR compra)',
+      gmail_query: 'from:(procesos@bbva.com.pe) subject:(Compras OR Consumo)',
       label_procesado: 'ingesta/bbva/ok',
       label_error: 'ingesta/bbva/error',
       parser: 'bbva',
@@ -66,10 +66,19 @@ const CONFIG = {
     scotiabank: {
       enabled: true,
       banco_nombre: 'Scotiabank',
-      gmail_query: 'from:(notificaciones@scotiabank.com.pe)',
+      gmail_query: 'from:(alertas@scotiabank.com.pe) subject:(Compras OR Consumo)',
       label_procesado: 'ingesta/scotiabank/ok',
       label_error: 'ingesta/scotiabank/error',
       parser: 'scotiabank',
+      fallback_ai: true
+    },
+    diners: {
+      enabled: true,
+      banco_nombre: 'Diners Club',
+      gmail_query: 'from:(avisos@dinersenlinea.pe) subject:(Compras OR Consumo)',
+      label_procesado: 'ingesta/diners/ok',
+      label_error: 'ingesta/diners/error',
+      parser: 'diners',
       fallback_ai: true
     },
     yape: {

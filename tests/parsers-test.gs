@@ -277,3 +277,85 @@ TestRunner.suite('PlinParser — casos de error', ({ test, assert }) => {
     assert.isNull(PlinParser.parse(null));
   });
 });
+
+// ── Diners Club ───────────────────────────────────────────────────────────────
+
+const DINERS_EMAIL_OK = `
+Notificación de Compras Diners Club
+
+Estimado cliente,
+Se realizó una compra con su tarjeta Diners Club.
+
+Fecha: 05/04/2026 13:45
+Monto: S/ 210.00
+Comercio: SAGA FALABELLA JOCKEY
+Tarjeta: **** 3456
+
+Si no reconoce esta operación, contáctenos al 615-1111.
+`;
+
+const DINERS_EMAIL_CONSUMO = `
+Aviso de Consumo Diners Club
+
+Hola,
+Se procesó un consumo con su tarjeta Diners en línea.
+
+Fecha: 01/04/2026
+Importe: S/ 75.50
+Establecimiento: AMAZON.COM
+`;
+
+const DINERS_EMAIL_SIN_MONTO = `
+Aviso Diners Club
+
+Estimado cliente,
+Fecha: 05/04/2026
+(monto no disponible)
+`;
+
+TestRunner.suite('DinersParser — parse exitoso', ({ test, assert }) => {
+  test('extrae monto correctamente', () => {
+    const result = DinersParser.parse(DINERS_EMAIL_OK);
+    assert.isNotNull(result);
+    assert.closeTo(result.monto, 210.00, 0.001);
+  });
+
+  test('extrae fecha en formato YYYY-MM-DD', () => {
+    const result = DinersParser.parse(DINERS_EMAIL_OK);
+    assert.isNotNull(result);
+    assert.equal(result.fecha, '2026-04-05');
+  });
+
+  test('extrae comercio', () => {
+    const result = DinersParser.parse(DINERS_EMAIL_OK);
+    assert.isNotNull(result);
+    assert.isTrue(result.comercio.length > 0);
+  });
+
+  test('incluye raw en el resultado', () => {
+    const result = DinersParser.parse(DINERS_EMAIL_OK);
+    assert.isNotNull(result);
+    assert.equal(result.raw, DINERS_EMAIL_OK);
+  });
+
+  test('parsea email con Importe y Establecimiento', () => {
+    const result = DinersParser.parse(DINERS_EMAIL_CONSUMO);
+    assert.isNotNull(result);
+    assert.closeTo(result.monto, 75.50, 0.001);
+    assert.equal(result.fecha, '2026-04-01');
+  });
+});
+
+TestRunner.suite('DinersParser — casos de error', ({ test, assert }) => {
+  test('retorna null si no hay monto', () => {
+    assert.isNull(DinersParser.parse(DINERS_EMAIL_SIN_MONTO));
+  });
+
+  test('retorna null para string vacío', () => {
+    assert.isNull(DinersParser.parse(''));
+  });
+
+  test('retorna null para null', () => {
+    assert.isNull(DinersParser.parse(null));
+  });
+});

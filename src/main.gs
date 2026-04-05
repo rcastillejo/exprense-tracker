@@ -16,6 +16,7 @@ const ParserRegistry = {
   interbank: InterbankParser,
   bbva: BbvaParser,
   scotiabank: ScotiabankParser,
+  diners: DinersParser,
   yape: YapeParser,
   plin: PlinParser,
 
