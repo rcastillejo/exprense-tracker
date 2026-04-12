@@ -3,7 +3,7 @@
 ## Issue: #10 — Spike: adoptar spec driven development
 ## Version: v1.0
 ## Date: 2026-04-11
-## Status: Draft
+## Status: Approved
 
 ---
 
