@@ -278,7 +278,7 @@ sequenceDiagram
 
 **Justificación:** `claude-code-action` ya provee:
 1. Manejo de contexto del repositorio (checkout, herramientas de lectura/escritura)
-2. Gestión de ramas (`branch_prefix`)
+2. Gestión de ramas (`branch_prefix`) — en Alt 2 no se usa esta feature; la rama `sdd/issue-<N>` se crea determinísticamente por el workflow antes de invocar la action
 3. Comentarios persistentes en issues/PRs (`use_sticky_comment`)
 4. Permisos de escritura al repo (`contents: write`)
 5. Tracking de progreso (`track_progress: true`)

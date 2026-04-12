@@ -200,11 +200,12 @@ THEN el agente bloquea el merge y solicita la creación de las specs
 **Scenario 1 — Flujo completo sin interrupciones**
 ```
 GIVEN que el product owner crea un issue con descripción y criterios
-WHEN el product owner menciona "@claude" en el issue
-THEN el agente genera requirements.md y espera aprobación
-  AND al recibir "@claude-approve-requirements", genera design.md y espera aprobación
-  AND al recibir "@claude-approve-design", inicia la implementación
-  AND al completar la implementación, abre un PR con referencia al issue
+WHEN el issue es creado o asignado en GitHub
+THEN el agente genera requirements.md en rama sdd/issue-N y espera aprobación
+  AND un Draft PR se abre automáticamente (sdd/issue-N → main) al finalizar requirements
+  AND al recibir "@claude-approve-requirements" en el issue, genera design.md y espera aprobación
+  AND al recibir "@claude-approve-design" en el issue, inicia la implementación
+  AND al completar la implementación, el Draft PR pasa a Ready for Review
   AND el product owner revisa el PR y hace merge manualmente
 ```
 
