@@ -96,6 +96,25 @@ CLAUDE.md                        # Instrucciones globales para el agente (nuevo/
 
 ---
 
+### Mecanismo de bloqueo de PR sin specs (US-05 Scenario 2)
+
+Cuando un PR intenta implementar una feature sin directorio `.specs/` asociado, el bloqueo se aplica así:
+
+1. El evento `pull_request: [opened, synchronize]` activa `claude-review.yml` → job `spec-review`
+2. El agente extrae el número de issue desde el título o body del PR
+3. Verifica la existencia del directorio `.specs/<issue-id>-feature/` en el repositorio
+4. **Si el directorio no existe:**
+   - El agente publica un comentario bloqueante en el PR indicando el path esperado (`.specs/<N>-feature/`)
+   - El job finaliza con código de salida no-cero → estado `failure` en GitHub
+5. La branch protection rule en `main` requiere que el check `spec-review` pase antes de habilitar el merge
+6. Con el job en `failure`, GitHub deshabilita el botón de merge hasta que las specs existan
+
+**Pre-requisito de configuración:** Activar branch protection en `main` con required status check `spec-review` (GitHub → Settings → Branches → Branch protection rules → Require status checks to pass → `spec-review`).
+
+**Cambio requerido en `claude-review.yml`:** El prompt del job `spec-review` debe incluir la instrucción explícita: si `.specs/<issue-id>-feature/` no existe, publicar comentario de bloqueo y finalizar con error. Este cambio se especifica como tarea de implementación en `tasks.md`.
+
+---
+
 ## Diagrama de secuencia
 
 ```mermaid
@@ -197,7 +216,7 @@ sequenceDiagram
 1. **Auditable:** todo el historial de aprobaciones queda en el issue
 2. **Contextual:** el product owner puede agregar feedback junto al comando
 3. **Familiar:** no requiere aprender nuevas herramientas
-4. **Alineado al stack:** `sdd-feature.yml` ya filtra por `contains(body, '@claude-approve-*')`
+4. **Alineado al stack:** `sdd-feature.yml` ya filtra mediante dos condiciones separadas y literales: `contains(github.event.comment.body, '@claude-approve-requirements')` y `contains(github.event.comment.body, '@claude-approve-design')`
 
 **Consecuencia:** El product owner debe tener acceso de escritura al repositorio para que sus comentarios activen el workflow.
 
@@ -302,6 +321,7 @@ CLAUDE.md                         ❌ no existe — debe crearse
 | `docs/sdd-workflow-guide.md` | **Crear** | Guía de uso del workflow SDD para el product owner (cómo crear un issue, comandos disponibles, qué esperar en cada fase) | Alta |
 | `.specs/10-feature/tasks.md` | **Crear** (fase impl.) | Lista de tareas de implementación, generada automáticamente cuando se apruebe este design | Media |
 | `sdd-feature.yml` | **Sin cambio** | Ya implementa los 3 jobs correctamente según el requirements.md aprobado | — |
+| `claude-review.yml` | **Actualizar** | Agregar verificación de directorio `.specs/<issue-id>-feature/`; si no existe, el job falla y bloquea el merge (US-05 Scenario 2). Requiere activar branch protection con required status check `spec-review` en `main` | Alta |
 | `claude.yml` | **Sin cambio** | Workflow general no necesita modificación | — |
 | `docs/problem-statement.md` | **Sin cambio** | Solo lectura como contexto del agente | — |
 | `docs/decisions/ADR-001-*.md` | **Sin cambio** | Solo lectura como restricciones técnicas | — |
