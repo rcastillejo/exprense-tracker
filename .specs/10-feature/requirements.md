@@ -52,8 +52,8 @@ THEN se crea el archivo en `.specs/<issue-id>-feature/requirements.md`
 **Scenario 2 — requirements.md rechazado por el product owner**
 ```
 GIVEN que el agente ha generado un requirements.md
-  AND el product owner revisa el documento y detecta ambigüedades o errores
-WHEN el product owner comenta en el issue con correcciones
+  AND el product owner revisa el documento en el Draft PR y detecta ambigüedades o errores
+WHEN el product owner comenta en el PR del ciclo SDD con @claude + correcciones
 THEN el agente actualiza el requirements.md incorporando el feedback
   AND genera una nueva versión sin crear un archivo duplicado
   AND el status del archivo pasa a "Revised"
@@ -258,30 +258,35 @@ THEN el agente actualiza el documento según el feedback
 ## Flujo de trabajo agéntico (resumen)
 
 ```
-Issue creado (GitHub)
+Issue creado/asignado (GitHub)
        │
        ▼
-@claude mencionado
+GA crea rama sdd/issue-N + Agente genera requirements.md
+       │
+       ├──► Draft PR abierto automáticamente (sdd/issue-N → main)
        │
        ▼
-Agente genera requirements.md ──► Product owner revisa
-       │                                    │
-       │◄───────────────── feedback ────────┘
+Product owner revisa en Draft PR
+       │                    │
+       │◄── @claude en PR ──┘  (correcciones)
        │
-  @claude-approve-requirements
-       │
-       ▼
-Agente genera design.md ──► Product owner revisa
-       │                              │
-       │◄─────────── feedback ────────┘
-       │
-  @claude-approve-design
+  @claude-approve-requirements (en issue)
        │
        ▼
-Agente implementa código
+Agente marca requirements Approved + genera design.md
        │
        ▼
-Agente abre PR ──► Product owner hace merge
+Product owner revisa en Draft PR
+       │                    │
+       │◄── @claude en PR ──┘  (correcciones)
+       │
+  @claude-approve-design (en issue)
+       │
+       ▼
+Agente marca design Approved + implementa código
+       │
+       ▼
+Draft PR → Ready for Review ──► Product owner hace merge
 ```
 
 ---

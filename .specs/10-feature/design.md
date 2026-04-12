@@ -40,7 +40,7 @@ El workflow SDD se implementa como un sistema de orquestación agéntica sobre G
 │         ▼                       ▼                        ▼              │
 │  ┌─────────────┐      ┌──────────────────┐      ┌──────────────────┐   │
 │  │   .specs/   │      │  Git branch      │      │  Issue/PR        │   │
-│  │  <N>-feat/  │      │  sdd/issue-N-*   │      │  Comments        │   │
+│  │  <N>-feat/  │      │  sdd/issue-N     │      │  Comments        │   │
 │  │  *.md files │      │  (aislamiento)   │      │  (feedback loop) │   │
 │  └─────────────┘      └──────────────────┘      └──────────────────┘   │
 └────────────────────────────────────────────────────────────────────────┘
@@ -120,37 +120,40 @@ Cuando un PR intenta implementar una feature sin directorio `.specs/` asociado, 
 ```mermaid
 sequenceDiagram
     actor PO as Product Owner
-    participant GH as GitHub Issues
+    participant GH as GitHub Issues/PR
     participant GA as GitHub Actions
     participant CCA as claude-code-action
     participant Claude as Claude API (sonnet-4-6)
     participant Repo as Git Repository
 
     PO->>GH: Crea issue con descripción y criterios
-    GH->>GA: evento: issues.opened
+    GH->>GA: evento: issues.opened / issues.assigned
+    GA->>Repo: git checkout -b sdd/issue-N (rama determinística)
     GA->>CCA: job sdd-requirements (prompt: generar requirements.md)
     CCA->>Claude: contexto + instrucciones + issue body
     Claude-->>CCA: plan de ejecución
-    CCA->>Repo: git checkout -b sdd/issue-N-<date>
     CCA->>Repo: mkdir .specs/N-feature/
     CCA->>Repo: write requirements.md
     CCA->>Repo: git commit && git push
     CCA->>GH: comenta "✅ requirements.md generado..."
+    GA->>GH: abre Draft PR (sdd/issue-N → main)
     GH-->>PO: notificación
 
-    PO->>PO: revisa requirements.md en rama sdd/issue-N-*
+    PO->>PO: revisa requirements.md en Draft PR
     alt feedback necesario
-        PO->>GH: comenta con correcciones (sin @claude-approve)
-        GH->>GA: evento: issue_comment
-        GA->>CCA: job sdd-requirements (actualizar doc)
+        PO->>GH: comenta en PR con @claude + correcciones
+        GH->>GA: evento: pull_request_review_comment
+        GA->>CCA: claude.yml (contexto PR, rama sdd/issue-N)
         CCA->>Repo: edita requirements.md (Revised)
         CCA->>Repo: git commit && git push
         CCA->>GH: comenta "✅ requirements.md actualizado..."
     end
 
-    PO->>GH: comenta "@claude-approve-requirements"
+    PO->>GH: comenta en issue "@claude-approve-requirements"
     GH->>GA: evento: issue_comment (contiene @claude-approve-requirements)
+    GA->>Repo: git checkout sdd/issue-N (existente)
     GA->>CCA: job sdd-design (prompt: generar design.md)
+    CCA->>Repo: actualiza requirements.md → Status: Approved
     CCA->>Claude: requirements.md + ADR-001 + instrucciones
     Claude-->>CCA: diseño técnico
     CCA->>Repo: write design.md
@@ -158,25 +161,29 @@ sequenceDiagram
     CCA->>GH: comenta "✅ design.md generado..."
     GH-->>PO: notificación
 
-    PO->>PO: revisa design.md
+    PO->>PO: revisa design.md en Draft PR
     alt feedback necesario
-        PO->>GH: comenta con correcciones
-        GA->>CCA: actualiza design.md
+        PO->>GH: comenta en PR con @claude + correcciones
+        GA->>CCA: claude.yml (contexto PR, rama sdd/issue-N)
+        CCA->>Repo: edita design.md (Revised)
         CCA->>Repo: git commit && git push
     end
 
-    PO->>GH: comenta "@claude-approve-design"
+    PO->>GH: comenta en issue "@claude-approve-design"
     GH->>GA: evento: issue_comment (contiene @claude-approve-design)
+    GA->>Repo: git checkout sdd/issue-N (existente)
     GA->>CCA: job sdd-implement (prompt: implementar)
+    CCA->>Repo: actualiza design.md → Status: Approved
     CCA->>Claude: requirements.md + design.md + codebase
     Claude-->>CCA: plan de implementación
     CCA->>Repo: write tasks.md
     CCA->>Repo: implementa código (múltiples commits)
-    CCA->>GH: abre Pull Request → issue #N
-    GH-->>PO: notificación PR listo
+    CCA->>GH: comenta "✅ implementación completa, PR listo para review"
+    GA->>GH: convierte Draft PR → Ready for Review (gh pr ready)
+    GH-->>PO: notificación PR listo para code review
 
     PO->>GH: revisa PR, hace merge manualmente
-    GH->>Repo: merge sdd/issue-N-* → main
+    GH->>Repo: merge sdd/issue-N → main
 ```
 
 ---
@@ -384,7 +391,7 @@ Al trabajar en un issue con ciclo SDD:
 | Riesgo | Mitigación |
 |---|---|
 | Cualquier colaborador puede activar el workflow con `@claude` | GitHub Actions solo ejecuta en comentarios de issues/PRs del repositorio; requiere acceso de escritura |
-| El agente podría hacer push a ramas críticas | `branch_prefix: "sdd/"` limita las ramas creadas; `main` requiere PR + aprobación manual |
+| El agente podría hacer push a ramas críticas | Rama `sdd/issue-N` creada determinísticamente por el workflow (no por el agente); `main` requiere PR + aprobación manual |
 | Prompt injection en el cuerpo del issue | `claude-code-action` sanitiza el contexto; el agente opera con herramientas limitadas (`--allowedTools`) |
 | Exposición de secretos en logs | `CLAUDE_CODE_OAUTH_TOKEN` y `GIT_HUB_PAT` son GitHub Secrets; no aparecen en logs |
 | Ejecución de código arbitrario via specs | Las herramientas permitidas en `sdd-feature.yml` están acotadas: `Bash(git *), Read, Write, Edit` |
