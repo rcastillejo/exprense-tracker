@@ -3,7 +3,7 @@
 ## Issue: #10 — Spike: adoptar spec driven development
 ## Version: v1.0
 ## Date: 2026-04-12
-## Status: Draft
+## Status: Revised
 
 ---
 
@@ -63,7 +63,7 @@ El workflow SDD se implementa como un sistema de orquestación agéntica sobre G
 | **Ejecución IA** | `claude-code-action@v1` | Corre Claude como agente con acceso a herramientas de repo y Git |
 | **Contexto** | `CLAUDE.md`, `docs/`, `ADR-001` | Instrucciones y restricciones que guían las decisiones del agente |
 | **Specs** | `.specs/<N>-feature/*.md` | Artefactos versionados de cada fase (requirements, design, tasks) |
-| **Aislamiento** | Rama `sdd/issue-<N>-<date>` | Cada ciclo SDD opera en su propia rama; sin contaminar `main` |
+| **Aislamiento** | Rama `sdd/issue-<N>` (determinística) + Draft PR | Cada ciclo SDD opera en su propia rama; las correcciones se centralizan en el PR sin crear ramas adicionales |
 | **Aprobación** | Comentarios en Issue (`@claude-approve-*`) | Compuertas explícitas controladas por el product owner |
 | **Entrega** | Pull Request | Artefacto final de la fase de implementación; merge manual |
 
@@ -222,21 +222,26 @@ sequenceDiagram
 
 ---
 
-### DT-003 — Una rama por ciclo SDD
+### DT-003 — Una rama determinística por ciclo SDD con Draft PR
 
-**Decisión:** Cada ciclo SDD opera en una rama dedicada con prefijo `sdd/issue-<N>-<date>`. Los specs (`.md`) y el código de implementación conviven en la misma rama.
+**Decisión:** Cada ciclo SDD opera en una rama con nombre fijo `sdd/issue-<N>` (sin timestamp). Las tres fases (requirements, design, implement) conviven en la misma rama. Un Draft PR se abre automáticamente al finalizar la fase de requirements y actúa como centro de colaboración para correcciones.
 
 **Alternativas consideradas:**
-- Specs en `main` directamente (contamina el historial de main con commits de documentación)
-- Rama separada para specs y otra para código (overhead, complicaría el merge)
-- Tags de Git en lugar de ramas (no permite commits incrementales durante el ciclo)
+- `branch_prefix: "sdd/"` con timestamp en cada fase (implementación original) — crea una rama por fase, artefactos anteriores no disponibles sin merge previo
+- Merge automático a `main` entre fases — specs llegan a `main` sin revisión formal
+- Rama determinística sin Draft PR — correcciones via `@claude` en el issue crean ramas nuevas
 
-**Justificación:** Una sola rama por ciclo garantiza:
-1. **Trazabilidad:** `git log sdd/issue-10-*` muestra el ciclo completo
-2. **Aislamiento:** `main` solo recibe código aprobado via PR
-3. **Compatibilidad:** `claude-code-action` ya implementa `branch_prefix: "sdd/"` en `sdd-feature.yml`
+**Justificación:** El modelo Draft PR resuelve todos los escenarios de corrección identificados:
+1. **Una sola rama por ciclo:** `git log sdd/issue-<N>` muestra el ciclo completo (requirements → design → impl)
+2. **Sin dependencia de merges intermedios:** `sdd-design` e `sdd-implement` hacen checkout de `sdd/issue-<N>` y tienen acceso a todos los artefactos anteriores sin necesidad de PR mergeados
+3. **Correcciones en contexto PR:** `@claude` en el Draft PR usa `claude.yml` en contexto PR, que pushea a la rama del PR (sin crear nueva rama) — resuelve escenarios S-02, S-04, S-06
+4. **Estado visible:** el Draft PR refleja el estado del ciclo (Draft = en revisión de specs, Ready = listo para code review)
 
-**Consecuencia:** El PR final contiene tanto los archivos `.specs/` como el código implementado. Esto es intencional — los specs son el contrato que justifica el código.
+**Transición de aprobaciones:**
+- Correcciones durante cualquier fase → comenta en el **PR** con `@claude [feedback]`
+- Aprobación de fase → comenta en el **issue** con `@claude-approve-requirements` o `@claude-approve-design`
+
+**Consecuencia:** El PR final contiene tanto los archivos `.specs/` como el código implementado. El historial de commits en `sdd/issue-<N>` refleja el ciclo completo incluyendo correcciones iterativas.
 
 ---
 
@@ -320,7 +325,7 @@ CLAUDE.md                         ❌ no existe — debe crearse
 | `CLAUDE.md` | **Crear** | Instrucciones globales del agente: stack, convenciones, formato de specs, restricciones | Alta |
 | `docs/sdd-workflow-guide.md` | **Crear** | Guía de uso del workflow SDD para el product owner (cómo crear un issue, comandos disponibles, qué esperar en cada fase) | Alta |
 | `.specs/10-feature/tasks.md` | **Crear** (fase impl.) | Lista de tareas de implementación, generada automáticamente cuando se apruebe este design | Media |
-| `sdd-feature.yml` | **Sin cambio** | Ya implementa los 3 jobs correctamente según el requirements.md aprobado | — |
+| `sdd-feature.yml` | **Actualizado** | Implementa Alt 2 (DT-003 rev): rama determinística `sdd/issue-N`, Draft PR automático, checkout de rama existente en fases 2 y 3, `gh pr ready` al finalizar implementación | Alta |
 | `claude-review.yml` | **Actualizar** | Agregar verificación de directorio `.specs/<issue-id>-feature/`; si no existe, el job falla y bloquea el merge (US-05 Scenario 2). Requiere activar branch protection con required status check `spec-review` en `main` | Alta |
 | `claude.yml` | **Sin cambio** | Workflow general no necesita modificación | — |
 | `docs/problem-statement.md` | **Sin cambio** | Solo lectura como contexto del agente | — |
