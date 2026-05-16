@@ -8,8 +8,8 @@
         "@integromat/make-mcp-server"
       ],
       "env": {
-        "MAKE_API_KEY": "${MAKE_API_KEY}",
-        "MAKE_ZONE": "${MAKE_ZONE}"
+        "MAKE_API_KEY": "5NDV7Ee45gm5J81NIKYCvXWZsN3ASF0NOsiolfVHuP",
+        "MAKE_ZONE": "us1"
       }
     }
   }
