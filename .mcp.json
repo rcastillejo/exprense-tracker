@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "make": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "${MAKE_TOOLBOX_URL}"
+      ]
+    }
+  }
+}
