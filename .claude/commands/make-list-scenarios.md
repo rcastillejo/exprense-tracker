@@ -6,4 +6,4 @@ Use the `make` MCP server to fetch and display all scenarios. For each scenario 
 - Status (active / inactive)
 - Last run date (if available)
 
-If the MCP is not connected, remind the user to set MAKE_API_KEY and MAKE_ZONE and restart Claude Code.
+If the MCP is not connected, remind the user to set MAKE_TOOLBOX_URL (the URL from Make → MCP Toolboxes → your toolbox → Copy MCP Server URL) and restart Claude Code.
