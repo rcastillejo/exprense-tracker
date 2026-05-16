@@ -5,12 +5,9 @@
       "command": "npx",
       "args": [
         "-y",
-        "@integromat/make-mcp-server"
-      ],
-      "env": {
-        "MAKE_API_KEY": "5NDV7Ee45gm5J81NIKYCvXWZsN3ASF0NOsiolfVHuP",
-        "MAKE_ZONE": "us1"
-      }
+        "mcp-remote",
+        "${MAKE_TOOLBOX_URL}"
+      ]
     }
   }
 }
