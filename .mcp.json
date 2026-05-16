@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "make": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@integromat/make-mcp-server"
+      ],
+      "env": {
+        "MAKE_API_KEY": "${MAKE_API_KEY}",
+        "MAKE_ZONE": "${MAKE_ZONE}"
+      }
+    }
+  }
+}
