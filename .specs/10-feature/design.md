@@ -3,7 +3,7 @@
 ## Issue: #10 — Spike: adoptar spec driven development
 ## Version: v1.0
 ## Date: 2026-04-12
-## Status: Draft
+## Status: Revised
 
 ---
 
@@ -40,7 +40,7 @@ El workflow SDD se implementa como un sistema de orquestación agéntica sobre G
 │         ▼                       ▼                        ▼              │
 │  ┌─────────────┐      ┌──────────────────┐      ┌──────────────────┐   │
 │  │   .specs/   │      │  Git branch      │      │  Issue/PR        │   │
-│  │  <N>-feat/  │      │  sdd/issue-N-*   │      │  Comments        │   │
+│  │  <N>-feat/  │      │  sdd/issue-N     │      │  Comments        │   │
 │  │  *.md files │      │  (aislamiento)   │      │  (feedback loop) │   │
 │  └─────────────┘      └──────────────────┘      └──────────────────┘   │
 └────────────────────────────────────────────────────────────────────────┘
@@ -63,7 +63,7 @@ El workflow SDD se implementa como un sistema de orquestación agéntica sobre G
 | **Ejecución IA** | `claude-code-action@v1` | Corre Claude como agente con acceso a herramientas de repo y Git |
 | **Contexto** | `CLAUDE.md`, `docs/`, `ADR-001` | Instrucciones y restricciones que guían las decisiones del agente |
 | **Specs** | `.specs/<N>-feature/*.md` | Artefactos versionados de cada fase (requirements, design, tasks) |
-| **Aislamiento** | Rama `sdd/issue-<N>-<date>` | Cada ciclo SDD opera en su propia rama; sin contaminar `main` |
+| **Aislamiento** | Rama `sdd/issue-<N>` (determinística) + Draft PR | Cada ciclo SDD opera en su propia rama; las correcciones se centralizan en el PR sin crear ramas adicionales |
 | **Aprobación** | Comentarios en Issue (`@claude-approve-*`) | Compuertas explícitas controladas por el product owner |
 | **Entrega** | Pull Request | Artefacto final de la fase de implementación; merge manual |
 
@@ -120,37 +120,40 @@ Cuando un PR intenta implementar una feature sin directorio `.specs/` asociado, 
 ```mermaid
 sequenceDiagram
     actor PO as Product Owner
-    participant GH as GitHub Issues
+    participant GH as GitHub Issues/PR
     participant GA as GitHub Actions
     participant CCA as claude-code-action
     participant Claude as Claude API (sonnet-4-6)
     participant Repo as Git Repository
 
     PO->>GH: Crea issue con descripción y criterios
-    GH->>GA: evento: issues.opened
+    GH->>GA: evento: issues.opened / issues.assigned
+    GA->>Repo: git checkout -b sdd/issue-N (rama determinística)
     GA->>CCA: job sdd-requirements (prompt: generar requirements.md)
     CCA->>Claude: contexto + instrucciones + issue body
     Claude-->>CCA: plan de ejecución
-    CCA->>Repo: git checkout -b sdd/issue-N-<date>
     CCA->>Repo: mkdir .specs/N-feature/
     CCA->>Repo: write requirements.md
     CCA->>Repo: git commit && git push
     CCA->>GH: comenta "✅ requirements.md generado..."
+    GA->>GH: abre Draft PR (sdd/issue-N → main)
     GH-->>PO: notificación
 
-    PO->>PO: revisa requirements.md en rama sdd/issue-N-*
+    PO->>PO: revisa requirements.md en Draft PR
     alt feedback necesario
-        PO->>GH: comenta con correcciones (sin @claude-approve)
-        GH->>GA: evento: issue_comment
-        GA->>CCA: job sdd-requirements (actualizar doc)
+        PO->>GH: comenta en PR con @claude + correcciones
+        GH->>GA: evento: pull_request_review_comment
+        GA->>CCA: claude.yml (contexto PR, rama sdd/issue-N)
         CCA->>Repo: edita requirements.md (Revised)
         CCA->>Repo: git commit && git push
         CCA->>GH: comenta "✅ requirements.md actualizado..."
     end
 
-    PO->>GH: comenta "@claude-approve-requirements"
+    PO->>GH: comenta en issue "@claude-approve-requirements"
     GH->>GA: evento: issue_comment (contiene @claude-approve-requirements)
+    GA->>Repo: git checkout sdd/issue-N (existente)
     GA->>CCA: job sdd-design (prompt: generar design.md)
+    CCA->>Repo: actualiza requirements.md → Status: Approved
     CCA->>Claude: requirements.md + ADR-001 + instrucciones
     Claude-->>CCA: diseño técnico
     CCA->>Repo: write design.md
@@ -158,25 +161,29 @@ sequenceDiagram
     CCA->>GH: comenta "✅ design.md generado..."
     GH-->>PO: notificación
 
-    PO->>PO: revisa design.md
+    PO->>PO: revisa design.md en Draft PR
     alt feedback necesario
-        PO->>GH: comenta con correcciones
-        GA->>CCA: actualiza design.md
+        PO->>GH: comenta en PR con @claude + correcciones
+        GA->>CCA: claude.yml (contexto PR, rama sdd/issue-N)
+        CCA->>Repo: edita design.md (Revised)
         CCA->>Repo: git commit && git push
     end
 
-    PO->>GH: comenta "@claude-approve-design"
+    PO->>GH: comenta en issue "@claude-approve-design"
     GH->>GA: evento: issue_comment (contiene @claude-approve-design)
+    GA->>Repo: git checkout sdd/issue-N (existente)
     GA->>CCA: job sdd-implement (prompt: implementar)
+    CCA->>Repo: actualiza design.md → Status: Approved
     CCA->>Claude: requirements.md + design.md + codebase
     Claude-->>CCA: plan de implementación
     CCA->>Repo: write tasks.md
     CCA->>Repo: implementa código (múltiples commits)
-    CCA->>GH: abre Pull Request → issue #N
-    GH-->>PO: notificación PR listo
+    CCA->>GH: comenta "✅ implementación completa, PR listo para review"
+    GA->>GH: convierte Draft PR → Ready for Review (gh pr ready)
+    GH-->>PO: notificación PR listo para code review
 
     PO->>GH: revisa PR, hace merge manualmente
-    GH->>Repo: merge sdd/issue-N-* → main
+    GH->>Repo: merge sdd/issue-N → main
 ```
 
 ---
@@ -222,21 +229,26 @@ sequenceDiagram
 
 ---
 
-### DT-003 — Una rama por ciclo SDD
+### DT-003 — Una rama determinística por ciclo SDD con Draft PR
 
-**Decisión:** Cada ciclo SDD opera en una rama dedicada con prefijo `sdd/issue-<N>-<date>`. Los specs (`.md`) y el código de implementación conviven en la misma rama.
+**Decisión:** Cada ciclo SDD opera en una rama con nombre fijo `sdd/issue-<N>` (sin timestamp). Las tres fases (requirements, design, implement) conviven en la misma rama. Un Draft PR se abre automáticamente al finalizar la fase de requirements y actúa como centro de colaboración para correcciones.
 
 **Alternativas consideradas:**
-- Specs en `main` directamente (contamina el historial de main con commits de documentación)
-- Rama separada para specs y otra para código (overhead, complicaría el merge)
-- Tags de Git en lugar de ramas (no permite commits incrementales durante el ciclo)
+- `branch_prefix: "sdd/"` con timestamp en cada fase (implementación original) — crea una rama por fase, artefactos anteriores no disponibles sin merge previo
+- Merge automático a `main` entre fases — specs llegan a `main` sin revisión formal
+- Rama determinística sin Draft PR — correcciones via `@claude` en el issue crean ramas nuevas
 
-**Justificación:** Una sola rama por ciclo garantiza:
-1. **Trazabilidad:** `git log sdd/issue-10-*` muestra el ciclo completo
-2. **Aislamiento:** `main` solo recibe código aprobado via PR
-3. **Compatibilidad:** `claude-code-action` ya implementa `branch_prefix: "sdd/"` en `sdd-feature.yml`
+**Justificación:** El modelo Draft PR resuelve todos los escenarios de corrección identificados:
+1. **Una sola rama por ciclo:** `git log sdd/issue-<N>` muestra el ciclo completo (requirements → design → impl)
+2. **Sin dependencia de merges intermedios:** `sdd-design` e `sdd-implement` hacen checkout de `sdd/issue-<N>` y tienen acceso a todos los artefactos anteriores sin necesidad de PR mergeados
+3. **Correcciones en contexto PR:** `@claude` en el Draft PR usa `claude.yml` en contexto PR, que pushea a la rama del PR (sin crear nueva rama) — resuelve escenarios S-02, S-04, S-06
+4. **Estado visible:** el Draft PR refleja el estado del ciclo (Draft = en revisión de specs, Ready = listo para code review)
 
-**Consecuencia:** El PR final contiene tanto los archivos `.specs/` como el código implementado. Esto es intencional — los specs son el contrato que justifica el código.
+**Transición de aprobaciones:**
+- Correcciones durante cualquier fase → comenta en el **PR** con `@claude [feedback]`
+- Aprobación de fase → comenta en el **issue** con `@claude-approve-requirements` o `@claude-approve-design`
+
+**Consecuencia:** El PR final contiene tanto los archivos `.specs/` como el código implementado. El historial de commits en `sdd/issue-<N>` refleja el ciclo completo incluyendo correcciones iterativas.
 
 ---
 
@@ -266,7 +278,7 @@ sequenceDiagram
 
 **Justificación:** `claude-code-action` ya provee:
 1. Manejo de contexto del repositorio (checkout, herramientas de lectura/escritura)
-2. Gestión de ramas (`branch_prefix`)
+2. Gestión de ramas (`branch_prefix`) — en Alt 2 no se usa esta feature; la rama `sdd/issue-<N>` se crea determinísticamente por el workflow antes de invocar la action
 3. Comentarios persistentes en issues/PRs (`use_sticky_comment`)
 4. Permisos de escritura al repo (`contents: write`)
 5. Tracking de progreso (`track_progress: true`)
@@ -320,7 +332,7 @@ CLAUDE.md                         ❌ no existe — debe crearse
 | `CLAUDE.md` | **Crear** | Instrucciones globales del agente: stack, convenciones, formato de specs, restricciones | Alta |
 | `docs/sdd-workflow-guide.md` | **Crear** | Guía de uso del workflow SDD para el product owner (cómo crear un issue, comandos disponibles, qué esperar en cada fase) | Alta |
 | `.specs/10-feature/tasks.md` | **Crear** (fase impl.) | Lista de tareas de implementación, generada automáticamente cuando se apruebe este design | Media |
-| `sdd-feature.yml` | **Sin cambio** | Ya implementa los 3 jobs correctamente según el requirements.md aprobado | — |
+| `sdd-feature.yml` | **Actualizado** | Implementa Alt 2 (DT-003 rev): rama determinística `sdd/issue-N`, Draft PR automático, checkout de rama existente en fases 2 y 3, `gh pr ready` al finalizar implementación | Alta |
 | `claude-review.yml` | **Actualizar** | Agregar verificación de directorio `.specs/<issue-id>-feature/`; si no existe, el job falla y bloquea el merge (US-05 Scenario 2). Requiere activar branch protection con required status check `spec-review` en `main` | Alta |
 | `claude.yml` | **Sin cambio** | Workflow general no necesita modificación | — |
 | `docs/problem-statement.md` | **Sin cambio** | Solo lectura como contexto del agente | — |
@@ -379,7 +391,7 @@ Al trabajar en un issue con ciclo SDD:
 | Riesgo | Mitigación |
 |---|---|
 | Cualquier colaborador puede activar el workflow con `@claude` | GitHub Actions solo ejecuta en comentarios de issues/PRs del repositorio; requiere acceso de escritura |
-| El agente podría hacer push a ramas críticas | `branch_prefix: "sdd/"` limita las ramas creadas; `main` requiere PR + aprobación manual |
+| El agente podría hacer push a ramas críticas | Rama `sdd/issue-N` creada determinísticamente por el workflow (no por el agente); `main` requiere PR + aprobación manual |
 | Prompt injection en el cuerpo del issue | `claude-code-action` sanitiza el contexto; el agente opera con herramientas limitadas (`--allowedTools`) |
 | Exposición de secretos en logs | `CLAUDE_CODE_OAUTH_TOKEN` y `GIT_HUB_PAT` son GitHub Secrets; no aparecen en logs |
 | Ejecución de código arbitrario via specs | Las herramientas permitidas en `sdd-feature.yml` están acotadas: `Bash(git *), Read, Write, Edit` |

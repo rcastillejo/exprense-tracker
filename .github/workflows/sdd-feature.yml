@@ -7,6 +7,8 @@ on:
     types: [created]
 
 jobs:
+  # Phase 1: Requirements — triggered on issue open/assign
+  # Creates deterministic branch sdd/issue-N, writes requirements.md, opens Draft PR
   sdd-requirements:
     if: github.event_name == 'issues'
     runs-on: ubuntu-latest
@@ -20,7 +22,22 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GIT_HUB_PAT }}
-          fetch-depth: 1                    
+          fetch-depth: 0
+
+      - name: Create deterministic SDD branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          BRANCH="sdd/issue-${{ github.event.issue.number }}"
+          # Reuse existing branch or create new one from main
+          if git ls-remote --exit-code origin "refs/heads/$BRANCH" > /dev/null 2>&1; then
+            git checkout "$BRANCH"
+            git pull origin "$BRANCH" --rebase
+          else
+            git checkout -b "$BRANCH"
+            git push -u origin "$BRANCH"
+          fi
+
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -29,7 +46,6 @@ jobs:
             actions: read
           claude_args: '--allowedTools "Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git config:*),Bash(mkdir:*),Bash(gh issue comment:*),Read,Write,Edit" --permission-mode acceptEdits'
           trigger_phrase: "@claude"
-          branch_prefix: "sdd/"
           use_sticky_comment: true
           classify_inline_comments: true
           track_progress: true
@@ -44,21 +60,69 @@ jobs:
             Título: "${{ github.event.issue.title }}"
             Descripción: ${{ github.event.issue.body }}
 
-            Luego ejecuta estos pasos en orden:
+            Estás en la rama sdd/issue-${{ github.event.issue.number }}. No crees una rama nueva.
 
-            1. Crea el directorio: .specs/${{ github.event.issue.number }}-feature/
-            
-            2. Crea el archivo .specs/${{ github.event.issue.number }}-feature/requirements.md con:
+            Ejecuta estos pasos en orden:
+
+            1. Crea el directorio .specs/${{ github.event.issue.number }}-feature/ (si no existe)
+
+            2. Crea (o actualiza) .specs/${{ github.event.issue.number }}-feature/requirements.md con:
+               - Frontmatter con Status: Draft
                - User stories en formato "As a [usuario], I want [acción] so that [beneficio]"
                - Criterios de aceptación GIVEN/WHEN/THEN por cada story
                - Restricciones técnicas alineadas al ADR-001
                - Sección fuera de alcance
 
-            3. Comenta en el issue #${{ github.event.issue.number }}:
-               "✅ requirements.md generado. Revisar en .specs/${{ github.event.issue.number }}-feature/requirements.md
-               Responder con @claude-approve-requirements para continuar con design.md"
+            3. Commitea y sube los cambios:
+               git add .specs/${{ github.event.issue.number }}-feature/
+               git commit -m "docs: add requirements.md for issue #${{ github.event.issue.number }}"
+               git push origin sdd/issue-${{ github.event.issue.number }}
 
+            4. Comenta en el issue #${{ github.event.issue.number }}:
+               "✅ requirements.md generado en la rama sdd/issue-${{ github.event.issue.number }}.
+               Un Draft PR se abrirá en segundos con el diff completo.
 
+               Para **corregir**: comenta en el PR del ciclo SDD con @claude + tu feedback.
+               Para **aprobar** y avanzar al diseño: responde aquí con @claude-approve-requirements"
+
+      - name: Create Draft PR
+        env:
+          GH_TOKEN: ${{ secrets.GIT_HUB_PAT }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          BRANCH="sdd/issue-${ISSUE_NUMBER}"
+          PR_EXISTS=$(gh pr list --head "$BRANCH" --state open --json number --jq 'length' 2>/dev/null || echo "0")
+          if [ "$PR_EXISTS" -eq "0" ]; then
+            cat > /tmp/pr-body.md << EOF
+## Ciclo SDD — Issue #${ISSUE_NUMBER}
+
+Estado: 🔵 **REQUIREMENTS IN REVIEW**
+
+### Artefactos
+- [ ] \`.specs/${ISSUE_NUMBER}-feature/requirements.md\` — Draft
+- [ ] \`.specs/${ISSUE_NUMBER}-feature/design.md\`
+- [ ] \`.specs/${ISSUE_NUMBER}-feature/tasks.md\` + implementación
+
+### Flujo de trabajo
+- **Correcciones en cualquier fase**: comenta en este PR con \`@claude [feedback]\`
+- **Aprobar requirements**: comenta en issue #${ISSUE_NUMBER} con \`@claude-approve-requirements\`
+- **Aprobar design**: comenta en issue #${ISSUE_NUMBER} con \`@claude-approve-design\`
+
+Resuelve #${ISSUE_NUMBER}
+
+Generated with [Claude Code](https://claude.ai/code)
+EOF
+            gh pr create \
+              --draft \
+              --base main \
+              --head "$BRANCH" \
+              --title "feat: Issue #${ISSUE_NUMBER} — ${ISSUE_TITLE}" \
+              --body-file /tmp/pr-body.md || echo "Warning: PR creation failed, may already exist"
+          fi
+
+  # Phase 2: Design — triggered by @claude-approve-requirements comment in the issue
+  # Checks out sdd/issue-N, marks requirements.md as Approved, generates design.md
   sdd-design:
     if: |
       github.event_name == 'issue_comment' &&
@@ -72,30 +136,51 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GIT_HUB_PAT }}
+          ref: sdd/issue-${{ github.event.issue.number }}
           fetch-depth: 1
+
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GIT_HUB_PAT }}
-          branch_prefix: "sdd/"
+          claude_args: '--allowedTools "Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git config:*),Bash(gh issue comment:*),Read,Write,Edit" --permission-mode acceptEdits'
           use_sticky_comment: true
           classify_inline_comments: true
           track_progress: true
           include_fix_links: true
           prompt: |
             Requirements aprobados para issue #${{ github.event.issue.number }}.
-            1. Lee .specs/${{ github.event.issue.number }}-feature/requirements.md
-            
-            2. Genera en .specs/${{ github.event.issue.number }}-feature/design.md con:
-            - Arquitectura propuesta (componentes, capas)
-            - Diagrama de secuencia en Mermaid
-            - Decisiones técnicas (ADRs) con justificación
-            - Impacto en codebase existente
-            
-            3. Comenta en el issue #${{ github.event.issue.number }}:
-               "✅ design.md generado. Revisar en .specs/${{ github.event.issue.number }}-feature/design.md
-               Responder con @claude-approve-design para continuar con la implementación"
+            Estás en la rama sdd/issue-${{ github.event.issue.number }}. No crees una rama nueva.
 
+            0. Actualiza el campo Status en .specs/${{ github.event.issue.number }}-feature/requirements.md
+               de "Draft" o "Revised" a "Approved". Commitea ese cambio:
+               git add .specs/${{ github.event.issue.number }}-feature/requirements.md
+               git commit -m "docs: approve requirements.md for issue #${{ github.event.issue.number }}"
+               git push origin sdd/issue-${{ github.event.issue.number }}
+
+            1. Lee .specs/${{ github.event.issue.number }}-feature/requirements.md
+
+            2. Crea .specs/${{ github.event.issue.number }}-feature/design.md con:
+               - Frontmatter con Status: Draft
+               - Arquitectura propuesta (componentes, capas)
+               - Diagrama de secuencia en Mermaid
+               - Decisiones técnicas (ADRs) con justificación
+               - Impacto en codebase existente
+
+            3. Commitea y sube los cambios:
+               git add .specs/${{ github.event.issue.number }}-feature/design.md
+               git commit -m "docs: add design.md for issue #${{ github.event.issue.number }}"
+               git push origin sdd/issue-${{ github.event.issue.number }}
+
+            4. Comenta en el issue #${{ github.event.issue.number }}:
+               "✅ design.md generado en la rama sdd/issue-${{ github.event.issue.number }}.
+               Revisar el diff en el PR del ciclo SDD.
+
+               Para **corregir**: comenta en el PR con @claude + tu feedback.
+               Para **aprobar** y avanzar a implementación: responde aquí con @claude-approve-design"
+
+  # Phase 3: Implementation — triggered by @claude-approve-design comment in the issue
+  # Checks out sdd/issue-N, marks design.md as Approved, implements code, converts Draft PR to Ready
   sdd-implement:
     if: |
       github.event_name == 'issue_comment' &&
@@ -109,23 +194,50 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GIT_HUB_PAT }}
+          ref: sdd/issue-${{ github.event.issue.number }}
           fetch-depth: 1
+
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GIT_HUB_PAT }}
-          branch_prefix: "sdd/"
+          claude_args: '--allowedTools "Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git config:*),Bash(gh issue comment:*),Read,Write,Edit" --permission-mode acceptEdits'
           use_sticky_comment: true
           classify_inline_comments: true
           track_progress: true
           include_fix_links: true
           prompt: |
-            Design aprobado. Lee requirements.md y design.md en
-            .specs/${{ github.event.issue.number }}-feature/
-            
-            1. Genera .specs/${{ github.event.issue.number }}-feature/tasks.md con tareas secuenciadas y sus dependencias
-            2. Implementa cada task respetando el design
-            3. Escribe tests unitarios por cada componente nuevo
-            4. Crea un PR vinculado al issue #${{ github.event.issue.number }}
-               con título: "feat: [descripción del issue]"
-               Body: resumen de requirements + design decisions + tasks completadas
+            Design aprobado para issue #${{ github.event.issue.number }}.
+            Estás en la rama sdd/issue-${{ github.event.issue.number }}. No crees una rama nueva.
+
+            0. Actualiza el campo Status en .specs/${{ github.event.issue.number }}-feature/design.md
+               de "Draft" o "Revised" a "Approved". Commitea ese cambio:
+               git add .specs/${{ github.event.issue.number }}-feature/design.md
+               git commit -m "docs: approve design.md for issue #${{ github.event.issue.number }}"
+               git push origin sdd/issue-${{ github.event.issue.number }}
+
+            1. Lee requirements.md y design.md en .specs/${{ github.event.issue.number }}-feature/
+
+            2. Genera .specs/${{ github.event.issue.number }}-feature/tasks.md con tareas secuenciadas y sus dependencias
+            3. Implementa cada task respetando el design
+            4. Escribe tests unitarios por cada componente nuevo
+            5. Commitea los cambios incrementalmente con mensajes descriptivos:
+               git add <archivos>
+               git commit -m "feat: [descripción] for issue #${{ github.event.issue.number }}"
+               git push origin sdd/issue-${{ github.event.issue.number }}
+            6. Comenta en el issue #${{ github.event.issue.number }} que la implementación está completa
+               y que el PR está listo para code review
+
+      - name: Mark PR as Ready for Review
+        env:
+          GH_TOKEN: ${{ secrets.GIT_HUB_PAT }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          BRANCH="sdd/issue-${ISSUE_NUMBER}"
+          PR_NUMBER=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+          if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ]; then
+            gh pr ready "$PR_NUMBER" 2>/dev/null || true
+            echo "PR #${PR_NUMBER} marked as ready for review"
+          else
+            echo "No open draft PR found for branch $BRANCH"
+          fi
